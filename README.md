@@ -26,7 +26,7 @@ cd build
 cmake ..
 make
 cd ../bin
-/QuadRotorSim
+./QuadRotorSim
 ```
 
 ## Usage <a name = "usage"></a>

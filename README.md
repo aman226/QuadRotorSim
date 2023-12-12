@@ -30,5 +30,6 @@ cd ../bin
 ```
 
 ## LQR Tracking
+![LQRTrack](https://github.com/aman226/QuadRotorSim/assets/73012966/506d2523-2262-4190-8415-b36bd4978572)
 
-![Uploading LQRTrack.gif…]()
+

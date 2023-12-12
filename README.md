@@ -12,7 +12,7 @@ This is a quadrotor simulator that I am working on. It is a work in progress. I 
 
 ### Prerequisites
 
-For this project, you need to have Armadillo Library installed. It is a state-of-the-art Linear Algebra that supports vectorization and parallelization.
+For this project, you need to have Armadillo Library installed. It is a state-of-the-art Linear Algebra library that supports vectorization and parallelization.
 
 ### Installing
 
@@ -29,6 +29,6 @@ cd ../bin
 ./QuadRotorSim
 ```
 
-## Usage <a name = "usage"></a>
+## LQR Tracking
 
-Add notes about how to use the system.
+![Uploading LQRTrack.gif…]()

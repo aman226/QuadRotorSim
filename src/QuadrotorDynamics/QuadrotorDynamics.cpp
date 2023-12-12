@@ -1,5 +1,6 @@
 #include "QuadrotorDynamics/QuadrotorDynamics.hpp"
-#include "matplot/matplot.h"
+#include <iostream>
+#include <omp.h>
 QuadrotorDynamics::QuadrotorDynamics(double m, double l, arma::mat J, double g, double kt, double km) {
     // Quadrotor parameters
     this->m = m;
@@ -14,7 +15,7 @@ QuadrotorDynamics::~QuadrotorDynamics() {
 }
 
 // Controller function
-arma::mat QuadrotorDynamics::controller(const arma::vec &x, const arma::vec &uhover, const arma::vec &x0, const arma::mat &K ) {
+arma::mat QuadrotorDynamics::controller(const arma::vec &x, const arma::vec &uhover, const arma::vec &x0, const arma::mat &K) {
     arma::vec q0 = x0.subvec(3, 6);
     arma::vec q = x.subvec(3, 6);
     arma::vec phi = qtorp(L(q0).t() * q);
@@ -111,6 +112,11 @@ arma::vec QuadrotorDynamics::quad_dynamics_rk4(const arma::vec &x, const arma::v
     return xn;
 }
 
+arma::vec QuadrotorDynamics::rk4_ss_integrator(const arma::vec &x, const arma::vec &x_int, const arma::vec &x0, const arma::vec &x_goal, const arma::mat &C, const arma::vec &r, double h){
+    return x_int + h*(-C*x + r - x_goal(arma::span(0,0)) - C*x0);
+}
+
+
 void QuadrotorDynamics::jacobian(arma::mat* A, arma::mat* B, arma::colvec x, arma::colvec u, double h, double jac_eps){
 arma::colvec u_eps(u.n_elem);
 arma::colvec x_eps(x.n_elem);
@@ -136,7 +142,7 @@ for(int i = 0; i < x.n_elem; i++){
 
 void QuadrotorDynamics::plot_state_vs_time(const arma::mat &xhist, const arma::vec &thist) {
     // Plot the state vs time
-    matplot::figure("Position");
+    std::shared_ptr<matplot::figure_type> pos_fig = matplot::figure("Position");
     matplot::hold(matplot::on);
     matplot::vector_1d t = arma::conv_to<matplot::vector_1d>::from(thist);
     
@@ -146,6 +152,9 @@ void QuadrotorDynamics::plot_state_vs_time(const arma::mat &xhist, const arma::v
     matplot::plot(t, x, "-b");
     matplot::plot(t, y, "-r");
     matplot::plot(t, z, "-g");
+    matplot::xlim({-4.0,4.0});
+    matplot::ylim({-4.0,4.0});
+    matplot::zlim({0.0,2.5});
     matplot::xlabel("Time (s)");
     matplot::ylabel("Position (m)");
     matplot::title("Position vs Time");
@@ -153,9 +162,9 @@ void QuadrotorDynamics::plot_state_vs_time(const arma::mat &xhist, const arma::v
     matplot::grid(matplot::on);
     matplot::hold(matplot::off);
 
-    matplot::show();
+    pos_fig->draw();
 
-    matplot::figure("3D Position");
+    std::shared_ptr<matplot::figure_type> pos_3d_fig = matplot::figure("3D Position");
     matplot::hold(matplot::on);
     matplot::plot3(x, y, z);
     matplot::xlabel("x (m)");
@@ -164,17 +173,14 @@ void QuadrotorDynamics::plot_state_vs_time(const arma::mat &xhist, const arma::v
     matplot::title("3D Position");
     matplot::grid(matplot::on);
     matplot::hold(matplot::off);
-
-    
-    matplot::show();
+    pos_3d_fig->draw();
 }
 
 void QuadrotorDynamics::plot_control_vs_time(const arma::mat &uhist, const arma::vec &thist){
     // Plot the control vs time
-    matplot::figure("Control");
+    std::shared_ptr<matplot::figure_type> control_fig = matplot::figure("Control");
     matplot::hold(matplot::on);
     matplot::vector_1d t = arma::conv_to<matplot::vector_1d>::from(thist);
-    
     matplot::vector_1d u1 = arma::conv_to<matplot::vector_1d>::from(uhist.row(0).t());
     matplot::vector_1d u2 = arma::conv_to<matplot::vector_1d>::from(uhist.row(1).t());
     matplot::vector_1d u3 = arma::conv_to<matplot::vector_1d>::from(uhist.row(2).t());
@@ -189,6 +195,49 @@ void QuadrotorDynamics::plot_control_vs_time(const arma::mat &uhist, const arma:
     matplot::legend({"u1", "u2", "u3", "u4"});
     matplot::grid(matplot::on);
     matplot::hold(matplot::off);
+    control_fig->draw();
+}
 
-    matplot::show();
+void QuadrotorDynamics::draw(const arma::vec &x){
+    this->x_.push_back(x(0));
+    this->y_.push_back(x(1));
+    this->z_.push_back(x(2));
+
+    // Get Points of circle 
+    matplot::vector_1d  x_traj = arma::conv_to<matplot::vector_1d>::from(2*arma::cos(arma::linspace(0,2*M_PI,20)));
+    matplot::vector_1d  y_traj = arma::conv_to<matplot::vector_1d>::from(2*arma::sin(arma::linspace(0,2*M_PI,20)));
+    matplot::vector_1d  z_traj = arma::conv_to<matplot::vector_1d>::from(arma::ones(1,20)*1);
+
+    // Get the rotation matrix
+    arma::vec q = x.subvec(3, 6);
+    arma::mat Q = qtoQ(q);
+    Q = Q.t();
+    arma::vec r1 = Q.col(0)/arma::norm(Q.col(0),2)*0.5;
+    arma::vec r2 = Q.col(1)/arma::norm(Q.col(1),2)*0.5;
+    arma::vec r3 = Q.col(2)/arma::norm(Q.col(2),2)*0.5;
+
+    std::vector<double> X = {x(0),x(0),x(0)};
+    std::vector<double> Y = {x(1),x(1),x(1)};
+    std::vector<double> Z = {x(2),x(2),x(2)};
+
+    std::vector<double> U = {r1(0),r2(0),r3(0)};
+    std::vector<double> V = {r1(1),r2(1),r3(1)};
+    std::vector<double> W = {r1(2),r2(2),r3(2)};
+    
+    matplot::hold(matplot::on);
+    matplot::cla();
+    matplot::quiver3(X, Y, Z, U, V, W)->line_width(3);
+    matplot::plot3(x_traj,y_traj,z_traj,"g--")->line_width(3);
+    matplot::plot3(this->x_,this->y_,this->z_,"k-")->line_width(3);
+    matplot::hold(matplot::off);
+    matplot::xlabel("x (m)");
+    matplot::ylabel("y (m)");
+    matplot::zlabel("z (m)");
+    fig->width(1920);
+    fig->height(1080);
+    matplot::title("3D Position");
+    matplot::xlim({-4.0,4.0});
+    matplot::ylim({-4.0,4.0});
+    matplot::zlim({0.0,2.5});
+    fig->draw();
 }

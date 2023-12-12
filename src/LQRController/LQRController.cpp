@@ -1,14 +1,10 @@
 #include <LQRController/LQRController.hpp>
 
-LQRController::LQRController(const arma::mat& A,
-                             const arma::mat& B,
-                             const arma::mat& Q,
-                             const arma::mat& R)
-    : A_(A), B_(B), Q_(Q), R_(R) {
-}
-
-arma::mat LQRController::computeOptimalGain() {
-    return solveDARE(A_, B_, Q_, R_);
+arma::mat LQRController::computeOptimalGain(const arma::mat& A,
+                                            const arma::mat& B,
+                                            const arma::mat& Q,
+                                            const arma::mat& R) {
+    return solveDARE(A, B, Q, R);
 }
 
 arma::mat LQRController::solveDARE(const arma::mat& A,

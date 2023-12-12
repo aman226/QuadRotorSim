@@ -1,15 +1,15 @@
 #ifndef QUADROTOR_DYNAMICS_HPP
 #define QUADROTOR_DYNAMICS_HPP
 #include <armadillo>
+#include <memory>
+#include <matplot/matplot.h>
 class QuadrotorDynamics {
 private:
     // Quadrotor parameters
-    double m = 0.5;
-    double l = 0.1750;
-    arma::mat J = arma::diagmat(arma::vec({0.0023, 0.0023, 0.004}));
-    double g = 9.81;
-    double kt = 1.0;
-    double km = 0.0245;
+    double m,l,g,kt,km;
+    arma::mat J;
+    std::shared_ptr<matplot::figure_type> fig = matplot::figure("3DAnim");
+    std::vector<double> x_,y_,z_;
 
 public:
     // Constructor
@@ -17,7 +17,7 @@ public:
     ~QuadrotorDynamics();
 
     // Controller function
-    arma::mat controller(const arma::vec &x, const arma::vec &uhover, const arma::vec &x0, const arma::mat &K );
+    arma::mat controller(const arma::vec &x, const arma::vec &uhover, const arma::vec &x0, const arma::mat &K);
 
     // Hat function for skew-symmetric matrix
     arma::mat hat(const arma::vec &v);
@@ -45,12 +45,14 @@ public:
 
     // RK4 Integration Method
     arma::vec quad_dynamics_rk4(const arma::vec &x, const arma::vec &u, double h);
+    arma::vec rk4_ss_integrator(const arma::vec &x, const arma::vec &x_int, const arma::vec &x0, const arma::vec &x_goal, const arma::mat &C, const arma::vec &r, double h);
 
     // Calculate Jacobian
     void jacobian(arma::mat* A, arma::mat* B, arma::colvec x, arma::colvec u, double h, double jac_eps);
 
     void plot_state_vs_time(const arma::mat &xhist, const arma::vec &thist);
     void plot_control_vs_time(const arma::mat &uhist, const arma::vec &thist);
+    void draw(const arma::vec &x);
 };
 
 #endif

@@ -4,18 +4,13 @@
 #include <armadillo>
 class LQRController {
 public:
-    LQRController(const arma::mat& A,
-                  const arma::mat& B,
-                  const arma::mat& Q,
-                  const arma::mat& R);
-
-    arma::mat computeOptimalGain();
+    arma::mat computeOptimalGain(const arma::mat& A,
+                                 const arma::mat& B,
+                                 const arma::mat& Q,
+                                 const arma::mat& R);
 
 private:
-    arma::mat A_; // System matrix
-    arma::mat B_; // Input matrix
-    arma::mat Q_; // State cost matrix
-    arma::mat R_; // Control cost matrix
+
 
     arma::mat solveDARE(const arma::mat& A,
                         const arma::mat& B,

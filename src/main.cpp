@@ -3,6 +3,7 @@
 #include <chrono>
 #include <LQRController/LQRController.hpp>
 #include <QuadrotorDynamics/QuadrotorDynamics.hpp>
+#include <QuaternionUtils/quaternion_op.hpp>
 
 int main() {
     unsigned int microsecond = 1000000;
@@ -38,7 +39,7 @@ int main() {
     LQRController lqr;
 
     arma::mat x_goal = x0;
-    arma::mat x_start =  arma::join_vert(arma::join_vert(arma::join_vert(r0 + 4*arma::randn(3), quadDynamics.rptoq(arma::vec({1.0, 0.0, 0.0}))), v0), omega0);
+    arma::mat x_start =  arma::join_vert(arma::join_vert(arma::join_vert(r0 + 4*arma::randn(3), rptoq(arma::vec({1.0, 0.0, 0.0}))), v0), omega0);
     // initialize control input and state vectors
     arma::mat uhist = arma::zeros<arma::mat>(4, Nt);
     arma::mat xhist = arma::zeros<arma::mat>(13, Nt);
@@ -52,28 +53,30 @@ int main() {
     
     arma::mat C({{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},{0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},{0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}});
 
-    arma::mat A_red = quadDynamics.E(q0).t() * A * quadDynamics.E(q0);
-    arma::mat B_red = quadDynamics.E(q0).t() * B;
+    arma::mat A_red = E(q0).t() * A * E(q0);
+    arma::mat B_red = E(q0).t() * B;
 
+    // Trajectory
     arma::vec theta = arma::linspace<arma::vec>(0, 2*arma::datum::pi, 50);
     double radius = 2.0;
     arma::vec x_circle = radius*arma::cos(theta);
     arma::vec y_circle = radius*arma::sin(theta);
+    arma::vec z_circle = arma::vec(arma::ones(50));
 
 
     // compute optimal gain matrix
     arma::mat K = lqr.computeOptimalGain(A_red, B_red, Q, R);
     xhist.col(0) = x_start;
     
-    quadDynamics.draw(xhist.col(0));
+    quadDynamics.draw(xhist.col(0),x_circle,y_circle,z_circle);
     arma::vec ref;
     double traj_cnt = 0;
     // simulate the system
     for (int k = 0; k < Nt - 1; ++k) {
         ref = arma::vec({x_circle(traj_cnt), y_circle(traj_cnt), 1.0});
-        uhist.col(k) = quadDynamics.controller(xhist.col(k), uhover, x_goal, K) + K(arma::span(0, 3), arma::span(0, 2)) * (ref - C*x_goal);
+        uhist.col(k) = lqr.controller(xhist.col(k), uhover, x_goal, K) + K(arma::span(0, 3), arma::span(0, 2)) * (ref - C*x_goal);
         xhist.col(k + 1) = quadDynamics.quad_dynamics_rk4(xhist.col(k), uhist.col(k), h);
-        quadDynamics.draw(xhist.col(k + 1));
+        quadDynamics.draw(xhist.col(k + 1),x_circle,y_circle,z_circle);
         double dist_to_ref = arma::norm(xhist(arma::span(0, 2), k) - ref);
 
         if (dist_to_ref < 0.1) {

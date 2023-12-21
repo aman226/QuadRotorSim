@@ -1,4 +1,5 @@
 #include "QuadrotorDynamics/QuadrotorDynamics.hpp"
+#include "QuaternionUtils/quaternion_op.hpp"
 #include <iostream>
 #include <omp.h>
 QuadrotorDynamics::QuadrotorDynamics(double m, double l, arma::mat J, double g, double kt, double km) {
@@ -13,70 +14,6 @@ QuadrotorDynamics::QuadrotorDynamics(double m, double l, arma::mat J, double g, 
 
 QuadrotorDynamics::~QuadrotorDynamics() {
 }
-
-// Controller function
-arma::mat QuadrotorDynamics::controller(const arma::vec &x, const arma::vec &uhover, const arma::vec &x0, const arma::mat &K) {
-    arma::vec q0 = x0.subvec(3, 6);
-    arma::vec q = x.subvec(3, 6);
-    arma::vec phi = qtorp(L(q0).t() * q);
-    arma::vec dx = arma::join_vert(arma::join_vert(arma::join_vert(x.subvec(0, 2) - x0.subvec(0, 2), phi), x.subvec(7, 9) - x0.subvec(7,9)), x.subvec(10, 12) - x0.subvec(10, 12));
-    arma::vec u = uhover - K * dx;
-    return u;
-}
-
-// Hat function for skew-symmetric matrix
-arma::mat QuadrotorDynamics::hat(const arma::vec &v) {
-    arma::mat Omega = arma::zeros<arma::mat>(3,3);
-    Omega(0,1) = -v(2);
-    Omega(0,2) = v(1);
-    Omega(1,0) = v(2);
-    Omega(1,2) = -v(0);
-    Omega(2,0) = -v(1);
-    Omega(2,1) = v(0);
-    return Omega;
-}
-
-// L function for quaternion
-arma::mat QuadrotorDynamics::L(const arma::vec &q) {
-    double s = q(0);
-    arma::vec v = q.subvec(1, 3);
-    arma::mat L = arma::join_vert(arma::join_horiz(arma::vec({s}), -v.t()),
-                                    arma::join_horiz(v, s*arma::eye<arma::mat>(3,3) + hat(v)));
-    return L;
-}
-
-// Quaternion to rotation matrix
-arma::mat QuadrotorDynamics::qtoQ(const arma::vec &q) {
-    arma::mat T = arma::diagmat(arma::vec({1, -1, -1, -1}));
-    arma::mat H = arma::join_vert(arma::zeros<arma::rowvec>(3), arma::eye<arma::mat>(3,3));
-    return H.t() * T * L(q) * T * L(q) * H;
-}
-
-// G function for quaternion
-arma::mat QuadrotorDynamics::G(const arma::vec &q) {
-    return L(q) * arma::join_vert(arma::zeros<arma::rowvec>(3), arma::eye<arma::mat>(3,3));
-}
-
-// rotation vector to quaternion
-arma::vec QuadrotorDynamics::rptoq(const arma::vec &phi) {
-    return (1 / sqrt(1 + arma::dot(phi, phi))) * arma::join_vert(arma::vec({1}), phi);
-}
-
-// quaternion to rotation vector
-arma::vec QuadrotorDynamics::qtorp(const arma::vec &q) {
-    return q.subvec(1, 3) / q(0);
-}
-
-// E function for quaternion
-arma::mat QuadrotorDynamics::E(const arma::vec &q) {
-    arma::mat Gq = G(q);
-    arma::mat E = arma::zeros<arma::mat>(13, 12);
-    E(arma::span(0, 2), arma::span(0, 2)) = arma::eye<arma::mat>(3, 3);
-    E(arma::span(3, 6), arma::span(3, 5)) = Gq;
-    E(arma::span(7, 12), arma::span(6, 11)) = arma::eye<arma::mat>(6, 6);
-    return E;
-}
-
 
 // quad dynamics function
 arma::vec QuadrotorDynamics::quad_dynamics(const arma::vec &x, const arma::vec &u) {
@@ -198,15 +135,16 @@ void QuadrotorDynamics::plot_control_vs_time(const arma::mat &uhist, const arma:
     control_fig->draw();
 }
 
-void QuadrotorDynamics::draw(const arma::vec &x){
+void QuadrotorDynamics::draw(const arma::vec &x, const arma::vec &x_traj_, const arma::vec &y_traj_, const arma::vec &z_traj_){
     this->x_.push_back(x(0));
     this->y_.push_back(x(1));
     this->z_.push_back(x(2));
-
-    // Get Points of circle 
-    matplot::vector_1d  x_traj = arma::conv_to<matplot::vector_1d>::from(2*arma::cos(arma::linspace(0,2*M_PI,20)));
-    matplot::vector_1d  y_traj = arma::conv_to<matplot::vector_1d>::from(2*arma::sin(arma::linspace(0,2*M_PI,20)));
-    matplot::vector_1d  z_traj = arma::conv_to<matplot::vector_1d>::from(arma::ones(1,20)*1);
+    matplot::vector_1d  x_traj,y_traj,z_traj;
+    if (!x_traj_.is_empty()){
+        x_traj = arma::conv_to<matplot::vector_1d>::from(x_traj_);
+        y_traj = arma::conv_to<matplot::vector_1d>::from(y_traj_);
+        z_traj = arma::conv_to<matplot::vector_1d>::from(z_traj_);
+    }
 
     // Get the rotation matrix
     arma::vec q = x.subvec(3, 6);
@@ -227,7 +165,10 @@ void QuadrotorDynamics::draw(const arma::vec &x){
     matplot::hold(matplot::on);
     matplot::cla();
     matplot::quiver3(X, Y, Z, U, V, W)->line_width(3);
-    matplot::plot3(x_traj,y_traj,z_traj,"g--")->line_width(3);
+
+    if (!x_traj_.is_empty())
+        matplot::plot3(x_traj,y_traj,z_traj,"g--")->line_width(3);
+
     matplot::plot3(this->x_,this->y_,this->z_,"k-")->line_width(3);
     matplot::hold(matplot::off);
     matplot::xlabel("x (m)");
